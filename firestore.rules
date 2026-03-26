@@ -1,0 +1,124 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - uid: string (required)
+//   - name: string (required)
+//   - email: string (required)
+//   - role: string (required, 'student' | 'admin')
+//   - hasVoted: boolean (required)
+//
+// Collection: candidates
+// Document ID: {candidateId}
+// Fields:
+//   - id: string (required)
+//   - name: string (required)
+//   - position: string (required)
+//   - imageUrl: string (required)
+//   - voteCount: number (required)
+//
+// Collection: votes
+// Document ID: {voteId}
+// Fields:
+//   - userId: string (required)
+//   - candidateId: string (required)
+//   - position: string (required)
+//   - timestamp: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         request.auth.token.email == "tumelomak0813@gmail.com");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'hasVoted']) &&
+             data.uid is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string &&
+             data.role in ['student', 'admin'] &&
+             data.hasVoted is bool;
+    }
+
+    function isValidCandidate(data) {
+      return data.keys().hasAll(['id', 'name', 'position', 'imageUrl', 'voteCount']) &&
+             data.id is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.position is string && data.position.size() > 0 && data.position.size() < 100 &&
+             data.imageUrl is string &&
+             data.voteCount is int && data.voteCount >= 0;
+    }
+
+    function isValidVote(data) {
+      return data.keys().hasAll(['userId', 'candidateId', 'position', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.candidateId is string &&
+             data.position is string &&
+             data.timestamp is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can only read their own profile, unless they are an admin
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can create their own profile as 'student'
+      // Admins can create any profile
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    ((isOwner(userId) && request.resource.data.role == 'student') || isAdmin());
+      
+      // Users can update their own profile but NOT their role
+      // Admins can update anything
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
+      
+      allow delete: if isAdmin();
+    }
+
+    match /candidates/{candidateId} {
+      // Anyone authenticated can read candidates
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, delete or update candidate metadata
+      allow create, delete: if isAdmin();
+      
+      allow update: if (isAdmin() && isValidCandidate(request.resource.data)) || 
+                    (isAuthenticated() && 
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voteCount']) &&
+                     request.resource.data.voteCount == resource.data.voteCount + 1);
+    }
+
+    match /votes/{voteId} {
+      // Only admins can see all votes
+      allow read: if isAdmin();
+      
+      // Users can create a vote if they haven't voted yet (enforced by app logic and user.hasVoted)
+      allow create: if isAuthenticated() && isValidVote(request.resource.data) && 
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.hasVoted == false;
+    }
+  }
+}

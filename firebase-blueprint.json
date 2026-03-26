@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "studentNumber": { "type": "string" },
+        "school": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "hasVoted": { "type": "boolean" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Candidate": {
+      "title": "Candidate",
+      "description": "Election candidate information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "position": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "voteCount": { "type": "integer" }
+      },
+      "required": ["id", "name", "position", "imageUrl", "voteCount"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "A single vote cast by a student",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "position": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "candidateId", "position", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/candidates/{candidateId}": {
+      "schema": "Candidate",
+      "description": "Election candidates"
+    },
+    "/votes/{voteId}": {
+      "schema": "Vote",
+      "description": "Individual votes cast"
+    }
+  }
+}
